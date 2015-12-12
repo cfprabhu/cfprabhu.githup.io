@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<title>Crime Map</title>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+	<style type="text/css">
+		 body { background-color:#CCC }
+      #map-outer {  height: 440px; 
+	  				padding: 20px; 
+					border: 2px solid #CCC; 
+					margin-bottom: 20px; 
+					background-color:#FFF }
+	  #map-container { height: 400px }
+	  @media all and (max-width: 991px) {
+		#map-outer  { height: 650px }
+		}
+	</style>
+	
+	<script type="text/javascript" src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+	<script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+</head>
+<body>
+	
+	<nav class="navbar navbar-default">
+	  <div class="container-fluid">
+	    <!-- Brand and toggle get grouped for better mobile display -->
+	    <div class="navbar-header">
+	      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+	        <span class="sr-only">Toggle navigation</span>
+	        <span class="icon-bar"></span>
+	        <span class="icon-bar"></span>
+	        <span class="icon-bar"></span>
+	      </button>
+	      <a class="navbar-brand" href="#">Brand</a>
+	    </div>
+
+	    <!-- Collect the nav links, forms, and other content for toggling -->
+	    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+	      <!-- <form class="navbar-form navbar-left" role="search">
+	        <div class="form-group">
+	          <input type="text" class="form-control" placeholder="Search">
+	        </div>
+	        <button type="submit" class="btn btn-default">Submit</button>
+	      </form> -->
+	    </div><!-- /.navbar-collapse -->
+	  </div><!-- /.container-fluid -->
+	</nav>
+	<div class="container">
+		<div class="row">
+			<form class="form-horizontal" name="commentform">
+			    <div class="form-group">
+			        <div class="col-md-4">
+			        	<input type="text" value="" id="txtAddress" name="txtAddress" class="form-control" placeholder="Search">
+			        </div>
+			        <div class="col-md-4">
+			        	<input type="button" class="form-control btn-danger" value="Search" onClick="javascript : GetLocation()">
+			        </div>
+			    </div>
+			</form>
+		</div><!-- /row -->
+		<div class="row">
+	      <div id="map-outer" class="col-md-12">
+	        <div id="map-canvas" class="col-md-8" style="height: 100%;width: 100%;"></div>
+	      </div><!-- /map-outer -->
+	  </div> <!-- /row -->
+	</div>
+</body>
+<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=places"></script>
+<script type="text/javascript">
+	window.onload = getMyLocation;
+
+
+    var geocoder, map, home_marker, crime_markers = [], movementTimeout, movementListener;
+
+    var infowindow = new google.maps.InfoWindow(
+    { 
+        size: new google.maps.Size(150,50)
+    });
+
+    function getMyLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(displayLocation);
+      } else {
+        alert("Oops, no geolocation support");
+      }
+    }
+
+    //This function is inokved asynchronously by the HTML5 geolocation API.
+    function displayLocation(position) {
+      //The latitude and longitude values obtained from HTML 5 API.
+      var latitude = position.coords.latitude;
+      var longitude = position.coords.longitude;
+      // var latitude = 40.7142700;
+      // var longitude = -74.0059700;
+      createMapForCoords(latitude,longitude);
+    }
+
+    function showMap(latLng) {
+      //Setting up the map options like zoom level, map type.
+      var mapOptions = {
+        center: latLng,
+        zoom: 18,
+        mapTypeId: google.maps.MapTypeId.ROADMAP
+      };
+
+      //Creating the Map instance and assigning the HTML div element to render it in.
+      map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+    }
+
+
+    function handleNearBySearchResults(results, status) {
+      if (status == google.maps.places.PlacesServiceStatus.OK) {
+        for (var i = 0; i < results.length; i++) {
+          var place = results[i];
+          createMarker(place.geometry.location, place);
+        }
+      }
+    }
+
+    function createMarker(latLng, placeResult) {
+      var markerOptions = {
+        position: latLng,
+        map: map,
+        animation: google.maps.Animation.DROP,
+        clickable: true
+      }
+      //Setting up the marker object to mark the location on the map canvas.
+      var marker = new google.maps.Marker(markerOptions);
+
+      if (placeResult) {
+        var content = placeResult.name+"<br/>"+placeResult.vicinity+"<br/>"+placeResult.types;
+        addInfoWindow(marker, latLng, content);
+      }
+      else {
+        var content = "You are here: " + latLng.lat() + ", " + latLng.lng();
+        addInfoWindow(marker, latLng, content);
+      }
+
+    }
+
+    function addInfoWindow(marker, latLng, content) {
+      var infoWindowOptions = {
+        content: content,
+        position: latLng
+      };
+
+      var infoWindow = new google.maps.InfoWindow(infoWindowOptions);
+
+      google.maps.event.addListener(marker, "click", function() {
+        infoWindow.open(map);
+      });
+    }
+
+    function GetLocation() {
+        var geocoder = new google.maps.Geocoder();
+        var address = document.getElementById("txtAddress").value;
+        
+        $.each(crime_markers, function(index, value) {
+            value.setMap(null);
+        });
+    
+        geocoder.geocode({ 'address': address }, function (results, status) {
+            
+            if (status == google.maps.GeocoderStatus.OK) {
+                var latitude = results[0].geometry.location.lat();
+                var longitude = results[0].geometry.location.lng();
+                createMapForCoords(latitude,longitude);
+            } else {
+                alert("Request failed.")
+            }
+        });
+    };
+	
+	function createMapForCoords(latitude,longitude){
+		var url = "http://api.spotcrime.com/crimes.json?lat="+latitude+"&lon="+longitude+"&radius=10&callback=?&key=spotcrime-private-api-key";
+
+        $.getJSON(url, function(data) {
+            console.log(data)
+            var bounds = new google.maps.LatLngBounds();
+            var totalCount = data.crimes.length;
+            $.each(data.crimes, function(index, crime) {
+                var spriteX = spritePosition(crime.type);
+
+                var zIndex = totalCount - index;
+                if (crime.type == "Other") {
+                    zIndex = 0;
+                }
+
+                // create mobile crime link using original link such as "http://spotcrime.com/crime/62365247-27f95d29460cf7a103d0814c2c60ccf1"
+                var link = crime.link;
+                //link = link.replace('http://spotcrime.com/crime/', 'http://spotcrime.com/mobile/crime/?')
+
+                /* render marker */
+                var marker = new google.maps.Marker({
+                    map: map,
+                    zIndex: zIndex,
+                    position: new google.maps.LatLng(crime.lat, crime.lon),
+                    // icon: new google.maps.MarkerImage('../images/icons/spotcrime_info/spotcrime-icons-sprite.png', new google.maps.Size(30, 25), new google.maps.Point(spriteX, 0)),
+                    icon: new google.maps.MarkerImage('//s3.amazonaws.com/s3.mylocalcrime.com/images/icons/spotcrime_info/spotcrime-icons-sprite.png', new google.maps.Size(30, 25), new google.maps.Point(spriteX, 0)),
+                    title: crime.type
+                });
+
+                bounds.extend(marker.getPosition());
+                var infowindow_content = "<div class='infowindow'><h4>"+crime.type+"</h4><p>"+crime.address+"</p><p>"+crime.date+"</p><p><a href='"+link+"'>More information</a></p></div>";
+                google.maps.event.addListener(marker, 'click', function(event) {
+                infowindow.setContent(infowindow_content);
+                infowindow.open(map, marker);
+            });
+            
+            crime_markers.push(marker);
+            console.log(crime_markers)
+
+            /* listing */
+
+            $record = $(
+                '<a href="' + link + '" class="list-group-item clearfix">' +
+                '<h4 class="list-group-item-heading"><div class="crime-type crime-type-' + crime.type.toLowerCase() + '"><span /></div>' + crime.type + '</h4>' +
+                '<p class="list-group-item-text crime-date">' + crime.date + '</p>' +
+                '<p class="list-group-item-text crime-address">' + crime.address + '</p>' +
+                '</a>'
+            );
+
+            $('#table_container').append($record);
+        });
+    })
+
+    var latLng = new google.maps.LatLng(latitude, longitude);
+    showMap(latLng);
+    //addNearByPlaces(latLng);
+    createMarker(latLng);
+    // alert("Latitude: " + latitude + "\nLongitude: " + longitude);
+	}
+    function spritePosition(type) {
+      return {
+        "Arrest":     0,
+        "Arson":      30,
+        "Assault":    60,
+        "Burglary":   90,
+        "Other":      120,
+        "Robbery":    150,
+        "Shooting":   180,
+        "Theft":      210,
+        "Vandalism":  240
+      }[type];
+    }
+
+</script>
+</html>
